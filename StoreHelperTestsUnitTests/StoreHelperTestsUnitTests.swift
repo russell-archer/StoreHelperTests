@@ -5,31 +5,60 @@
 //  Created by Russell Archer on 30/01/2023.
 //
 
+/*
+ 
+ Tests may be run from Xcode by clicking the diamond indicators in the test class, or from the command line as follows:
+ - Open Terminal and navigate to the top-level folder that holds your project.
+ - List the available schemes in your project with: xcodebuild -list
+ - List available SDKs and simulators with: xcodebuild -showsdks
+ - Build and run your tests: xcodebuild test -scheme StoreHelperTests -sdk iphonesimulator16.2 -destination "OS=16.2,name=iPhone 14 Pro Max"
+ 
+ */
+
 import XCTest
+import StoreKitTest
+@testable import StoreHelper
 
 final class StoreHelperTestsUnitTests: XCTestCase {
-
-    override func setUpWithError() throws {
+    var sut = StoreHelper()  // System under test
+    var session: SKTestSession?
+    
+    override func setUp() async throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
+        await sut.startAsync()
+        
+        session = try? SKTestSession(configurationFileNamed: "Products")
+        guard let session else { return }
+        session.resetToDefaultState()
+        session.disableDialogs = true
+        session.clearTransactions()
     }
-
+    
     override func tearDownWithError() throws {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
+        session = nil
     }
-
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-    }
-
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        measure {
-            // Put the code you want to measure the time of here.
+    
+    @MainActor func testPurchase() async throws {
+        XCTAssert(sut.hasStarted)
+        XCTAssert(sut.hasProducts)
+        
+        guard let productId = sut.nonConsumableProductIds?.first else {
+            XCTFail("No non-consumable products")
+            return
         }
-    }
+        
+        guard let product = sut.product(from: productId) else {
+            XCTFail("Cannot get product from \(productId)")
+            return
+        }
 
+        guard let result = try? await sut.purchase(product) else {
+            XCTFail("Could not purchase product \(productId)")
+            return
+        }
+
+        XCTAssert(result.purchaseState == .purchased)
+    }
 }
+
